@@ -51,7 +51,8 @@ namespace ASC_1
             services.AddMvc();
             services.AddOptions();
             services.Configure<ApplicationSettings>(Configuration.GetSection("AppSettings"));
-
+            services.AddDistributedMemoryCache();
+            services.AddSession();
             // Add application services.
             services.AddTransient<IEmailSender, AuthMessageSender>();
             services.AddTransient<ISmsSender, AuthMessageSender>();
