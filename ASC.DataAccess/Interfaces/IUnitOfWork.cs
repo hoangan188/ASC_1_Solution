@@ -4,7 +4,7 @@ using System.Text;
 
 namespace ASC.DataAccess.Interfaces
 {
-    class IUnitOfWork
+    public class IUnitOfWork
     {
     }
 }

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace ASC_1.Controllers
 {
-    public class HomeController : Controller
+    public class HomeController : AnonymousController
     {
         private IOptions<ApplicationSettings> _settings;
         public HomeController(IOptions<ApplicationSettings> settings)
@@ -46,10 +46,6 @@ namespace ASC_1.Controllers
             return View();
         }
 
-        public IActionResult Dashboard()
-        {
-            return View();
-        }
-        
+       
     }
 }

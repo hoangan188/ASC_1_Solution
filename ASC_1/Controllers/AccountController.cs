@@ -12,6 +12,8 @@ using Microsoft.Extensions.Options;
 using ASC_1.Models;
 using ASC_1.Models.AccountViewModels;
 using ASC_1.Services;
+using ASC.Utilities;
+using ASC.Models.BaseTypes;
 
 namespace ASC_1.Controllers
 {
@@ -66,15 +68,33 @@ namespace ASC_1.Controllers
             {
                 // This doesn't count login failures towards account lockout
                 // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+                var user = await _userManager.FindByEmailAsync(model.Email);
+                if(user == null)
+                {
+                    ModelState.AddModelError(string.Empty, "invalid login attempt.");
+                }
+                var isActive = Boolean.Parse(user.Claims.SingleOrDefault(p => p.ClaimType == "IsActive").ClaimValue);
+                if (!isActive)
+                {
+                    ModelState.TryAddModelError(string.Empty, "Account has been locked.");
+                    return View(model);
+                }
+                var result = await _signInManager.PasswordSignInAsync(user.UserName, model.Password,model.RememberMe, lockoutOnFailure: false);
                 if (result.Succeeded)
                 {
                     _logger.LogInformation(1, "User logged in.");
-                    return RedirectToLocal(returnUrl);
+                    if (!String.IsNullOrWhiteSpace(returnUrl))
+                        return RedirectToLocal(returnUrl);
+                    else
+                        return RedirectToAction("Dashboard", "Dashboard");
                 }
                 if (result.RequiresTwoFactor)
                 {
-                    return RedirectToAction(nameof(SendCode), new { ReturnUrl = returnUrl, RememberMe = model.RememberMe });
+                    return RedirectToAction(nameof(SendCode), new
+                    {
+                        ReturnUrl = returnUrl,
+                        RememberMe = model.RememberMe
+                    });
                 }
                 if (result.IsLockedOut)
                 {
@@ -311,6 +331,20 @@ namespace ASC_1.Controllers
         // POST: /Account/ResetPassword
         [HttpPost]
         [AllowAnonymous]
+        public async Task<IActionResult> InitiateResetPassword()
+        {
+            var userEmail = HttpContext.User.GetCurrentUserDetails().Email;
+            var user = await _userManager.FindByEmailAsync(userEmail);
+
+            var code = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var callbackUrl = Url.Action(nameof(ResetPassword), "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
+
+            await _emailSender.SendEmailAsync(userEmail, "Reset Password",$"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>");
+            return View("ResetPasswordEmailConfirmation");
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
         {
@@ -322,17 +356,20 @@ namespace ASC_1.Controllers
             if (user == null)
             {
                 // Don't reveal that the user does not exist
-                return RedirectToAction(nameof(AccountController.ResetPasswordConfirmation), "Account");
+                return RedirectToAction(nameof(AccountController.ResetPasswordConfirmation),
+               "Account");
             }
             var result = await _userManager.ResetPasswordAsync(user, model.Code, model.Password);
             if (result.Succeeded)
             {
-                return RedirectToAction(nameof(AccountController.ResetPasswordConfirmation), "Account");
+                if (HttpContext.User.Identity.IsAuthenticated)
+                    await _signInManager.SignOutAsync();
+                return RedirectToAction(nameof(AccountController.ResetPasswordConfirmation),
+               "Account");
             }
             AddErrors(result);
             return View();
         }
-
         //
         // GET: /Account/ResetPasswordConfirmation
         [HttpGet]
@@ -474,5 +511,85 @@ namespace ASC_1.Controllers
         }
 
         #endregion
+        [HttpGet]
+        public async Task<IActionResult> ServiceEngineers()
+        {
+            var serviceEngineers = await _userManager.GetUsersInRoleAsync(Roles.Engineer.ToString());// Hold all service engineers in session
+            HttpContext.Session.SetSession("ServiceEngineers", serviceEngineers);
+            return View(new ServiceEngineerViewModel
+            {
+                ServiceEngineers = serviceEngineers == null ? null : serviceEngineers.ToList() ,
+                Registration = new ServiceEngineerRegistrationViewModel() { IsEdit = false }
+            });
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ServiceEngineers(ServiceEngineerViewModel serviceEngineer)
+        {
+            serviceEngineer.ServiceEngineers = HttpContext.Session.GetSession<List<ApplicationUser>>("ServiceEngineers");
+            if (!ModelState.IsValid)
+            {
+                return View(serviceEngineer);
+            }
+            if (serviceEngineer.Registration.IsEdit)
+            {
+                // Update User
+                var user = await _userManager.FindByEmailAsync(serviceEngineer.Registration.Email);
+                user.UserName = serviceEngineer.Registration.UserName;
+                IdentityResult result = await _userManager.UpdateAsync(user);
+                if (!result.Succeeded){
+                    result.Errors.ToList().ForEach(p => ModelState.AddModelError("", p.Description));
+                    return View(serviceEngineer);}
+                // Update Password
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                IdentityResult passwordResult = await _userManager.ResetPasswordAsync(user, token, serviceEngineer.Registration.Password);
+                if (!passwordResult.Succeeded) {
+                    passwordResult.Errors.ToList().ForEach(p => ModelState.AddModelError("", p.Description));
+                    return View(serviceEngineer); }
+                // Update claims
+                user = await _userManager.FindByEmailAsync(serviceEngineer.Registration.Email);
+                var isActiveClaim = user.Claims.SingleOrDefault(p => p.ClaimType == "IsActive");
+                var removeClaimResult = await _userManager.RemoveClaimAsync(user,new System.Security.Claims.Claim(isActiveClaim.ClaimType, isActiveClaim.ClaimValue));
+                var addClaimResult = await _userManager.AddClaimAsync(user,new System.Security.Claims.Claim(isActiveClaim.ClaimType, serviceEngineer.Registration.IsActive.ToString()));
+            }
+            else
+            {
+                // Create User
+                ApplicationUser user = new ApplicationUser
+                {
+                    UserName = serviceEngineer.Registration.UserName,
+                    Email = serviceEngineer.Registration.Email,
+                    EmailConfirmed = true
+                };
+                IdentityResult result = await _userManager.CreateAsync(user, serviceEngineer.Registration.Password);
+                await _userManager.AddClaimAsync(user, new System.Security.Claims.Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", serviceEngineer.Registration.Email));
+                await _userManager.AddClaimAsync(user, new System.Security.Claims.Claim("IsActive", serviceEngineer.Registration.IsActive.ToString()));
+                if (!result.Succeeded)
+                {
+                    result.Errors.ToList().ForEach(p => ModelState.AddModelError("", p.Description));
+                    return View(serviceEngineer);
+                }
+                // Assign user to Engineer Role
+                var roleResult = await _userManager.AddToRoleAsync(user, Roles.Engineer.ToString());
+                if (!roleResult.Succeeded)
+                {
+                    roleResult.Errors.ToList().ForEach(p => ModelState.AddModelError("", p.Description));
+                    return View(serviceEngineer);
+                }
+            }
+            if(serviceEngineer.Registration.IsActive)
+            {
+                await _emailSender.SendEmailAsync(serviceEngineer.Registration.Email, 
+                    "Account Created/Modified", 
+                    $"Email : {serviceEngineer.Registration.Email} /n Passowrd : {serviceEngineer.Registration.Password}");
+            }
+            else
+            {
+                await _emailSender.SendEmailAsync(serviceEngineer.Registration.Email, 
+                    "Account Deactivated", 
+                    $"Your account has been deactivated.");
+            }
+            return RedirectToAction("ServiceEngineers");
+        }
     }
 }

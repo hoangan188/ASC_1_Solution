@@ -8,6 +8,8 @@
 
 
   <ItemGroup>
+    <PackageReference Include="ElCamino.AspNetCore.Identity.AzureTable" Version="1.6.6" />
+    <PackageReference Include="MailKit" Version="1.16.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.0.0" />
     <PackageReference Include="Microsoft.AspNetCore" Version="1.1.7" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Cookies" Version="1.1.3" />
@@ -33,11 +35,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ASC.DataAccess\ASC.DataAccess.csproj" />
     <ProjectReference Include="..\ASC.Utilities\ASC.Utilities.csproj" />
+    <ProjectReference Include="..\ASC_Models\ASC.Models.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="Views\Home\Dashboard.cshtml">
+    <Content Update="Views\Dashboard\Dashboard.cshtml">
       <Pack>$(IncludeRazorContentInPack)</Pack>
     </Content>
     <Content Update="Views\Shared\_SecureLayout.cshtml">

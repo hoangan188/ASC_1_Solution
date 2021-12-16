@@ -1,5 +1,9 @@
-﻿@{
- Layout = "_MasterLayout";
+﻿@using Microsoft.AspNetCore.Http
+@using ASC.Utilities
+@inject IHttpContextAccessor UserHttpContext
+@{
+    Layout = "_MasterLayout";
+    var currentUser = UserHttpContext.HttpContext.User.GetCurrentUserDetails();
 }
 <!-- Header -->
 <header class="secureLayout">
@@ -17,8 +21,8 @@
             <div class="user-view">
                 <div class="background blue-grey lighten-1"></div>
                 <a href="#!user"><img class="circle" src="~/images/male.png"></a>
-                <a href="#!name"><span class="white-text name">John Doe</span></a>
-                <a href="#!email"><span class="white-text email">jdandturk@gmail.com</span></a>
+                <a href="#!name"><span class="white-text name">@currentUser.Name</span></a>
+                <a href="#!email"><span class="white-text email">@currentUser.Email</span></a>
             </div>
         </li>
         <li>
@@ -37,17 +41,17 @@
                                 <a href="#!">Customers<i class="material-icons">account_box</i></a>
                             </li>
                             <li>
-                                <a href="#!">Provision User<i class="material-icons">person_add</i></a>
+                                <a href="#!">Deactivate Customer<i class="material-icons">remove_circle</i></a>
                             </li>
                             <li>
-                                <a href="#!">Deactivate User<i class="material-icons">remove_circle</i></a>
+                                <a asp-controller="Account" asp-action="ServiceEngineers">Service Engineers<i class="material-icons">person_add</i></a>
                             </li>
                         </ul>
                     </div>
                 </li>
             </ul>
         </li>
-        
+
         <li>
             <a class="collapsible-header" href="#!"><i class="material-icons">perm_data_setting</i>Service Requests</a>
         </li>
@@ -58,18 +62,51 @@
             <a class="collapsible-header" href="#!"><i class="material-icons">inbox</i>Promotions</a>
         </li>
         <li>
-            <a class="collapsible-header" href="#!"><i class="material-icons">settings</i>Settings</a>
+            <ul class="collapsible">
+                <li>
+                    <div class="collapsible-header"><i class="material-icons">settings</i>First</div>
+                    <div class="collapsible-body">
+                        <a class="collapsible-header" href="#!" id="ancrResetPassword">
+                            <i class="material-icons">lock_outline</i>Reset Password
+                        </a>
+                    </div>
+                </li>
+            </ul>
+
         </li>
         <li>
-            <a class="collapsible-header" href="#!"><i class="material-icons">exit_to_app</i>Logout</a>
+            <a class="collapsible-header" href="#!" id="ancrLogout"><i class="material-icons">exit_to_app</i>Logout</a>
         </li>
     </ul>
+    <form class="hide" method="post" id="logout_form" asp-controller="Account" asp-action="Logout">
+        <input type="submit" value="Logout" />
+    </form>
+    <form class="hide" method="post" id="resetPassword_form" asp-controller="Account"
+          asp-action="InitiateResetPassword"></form>
+    @section Scripts{
+        <script type="text/javascript">
+            $(function () {
+                $('#ancrLogout').click(function () {
+                    $('#logout_form').submit();
+                });
+                $('#ancrResetPassword').click(function () {
+                    $('#resetPassword_form').submit();
+                });
+            });
+            $(document).ready(function () {
+                $('.collapsible').collapsible();
+            });
+
+        </script>
+
+    }
 </header>
 <!-- Render Body -->
 <main class="secureLayout">
     <div class="row margin-bottom-0px">
         <div class="col s12">
             @RenderBody()
+            @RenderSection("Scripts", required: false)
         </div>
     </div>
 </main>
@@ -101,7 +138,7 @@
             <ul>
                 <li><a class="white-text" href="#!">Facebook</a></li>
                 <li><a class="white-text" href="#!">LinkedIn</a></li>
-                
+
                 <li><a class="white-text" href="#!">Twitter</a></li>
                 <li><a class="white-text" href="#!">Youtube</a></li>
             </ul>
@@ -115,3 +152,4 @@
         </div>
     </div>
 </footer>
+

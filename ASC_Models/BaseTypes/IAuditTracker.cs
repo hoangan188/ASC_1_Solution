@@ -4,7 +4,7 @@ using System.Text;
 
 namespace ASC_Models.BaseTypes
 {
-    class IAuditTracker
+    public class IAuditTracker
     {
     }
 }
